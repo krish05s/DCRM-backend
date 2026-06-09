@@ -586,10 +586,11 @@ router.post(
           description,
           activity_type,
           updated_by,
+          created_by,
           assignee_log,
           updated_at
          )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
         [
           lead_id || null,
           company_name || null,
@@ -608,6 +609,7 @@ router.post(
           parsedAmount,
           description || null,
           activity_type || null,
+          updatedBy,
           updatedBy,
           assigneeLog.length > 0 ? JSON.stringify(assigneeLog) : null,
         ],
@@ -1275,7 +1277,9 @@ router.put(
           grand_total, 
           assignee_log,
           source,
-          reference
+          reference,
+          description,
+          quotation_status
          FROM quotation WHERE id = ?`,
           [req.params.id],
         );
@@ -1288,6 +1292,29 @@ router.put(
           const grandTotal = qRow[0].grand_total || 0;
           const source = qRow[0].source || null;
           const reference = qRow[0].reference || null;
+          const descriptionStr = qRow[0].description;
+          const currentStatus = qRow[0].quotation_status;
+
+          // UPDATE (Real Stock Calculation): Deduct stock exactly once when quotation is Approved/Won
+          if (currentStatus !== "Approved" && currentStatus !== "Won") {
+            if (descriptionStr && descriptionStr.trim().startsWith("{")) {
+              try {
+                const parsed = JSON.parse(descriptionStr);
+                if (parsed.items && Array.isArray(parsed.items)) {
+                  for (let item of parsed.items) {
+                    if (item.product_id && item.qty) {
+                      await db.promise().query(
+                        "UPDATE product_master SET current_stocks = GREATEST(0, current_stocks - ?) WHERE id = ?",
+                        [parseFloat(item.qty), item.product_id]
+                      );
+                    }
+                  }
+                }
+              } catch (e) {
+                console.error("Error parsing description for stock deduction:", e);
+              }
+            }
+          }
 
           // Decline other quotations for this lead
           if (leadId) {
@@ -1600,6 +1627,7 @@ router.get(
           q.updated_by,
           q.updated_at,
           q.created_at,
+          q.created_by,
 
           l.status as lead_status,
           l.assignee as lead_assignee,
