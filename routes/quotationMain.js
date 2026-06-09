@@ -200,6 +200,9 @@ router.get("/read", authenticateAndAuthorize(), async (req, res) => {
           q.assignee,
           q.assignee_log,
           q.follow_up_date,
+          q.quotation_start_date,
+          q.quotation_expiry_date,
+          q.created_by,
           q.updated_by,
           q.updated_at,
           q.created_at as quotation_created_at,
@@ -258,6 +261,9 @@ router.get("/read", authenticateAndAuthorize(), async (req, res) => {
           q.assignee,
           q.assignee_log,
           q.follow_up_date,
+          q.quotation_start_date,
+          q.quotation_expiry_date,
+          q.created_by,
           q.updated_by,
           q.updated_at,
           q.created_at as quotation_created_at,
@@ -422,6 +428,8 @@ router.post(
         amount,
         description,
         activity_type,
+        quotation_start_date,
+        quotation_expiry_date,
       } = req.body;
 
       const updatedBy =
@@ -520,6 +528,8 @@ router.post(
 
       const parsedFollowUpDate = parseDate(follow_up_date);
       const parsedQuotationDate = parseDate(quotation_date);
+      const parsedQuotationStartDate = parseDate(quotation_start_date);
+      const parsedQuotationExpiryDate = parseDate(quotation_expiry_date);
 
       let assigneeLog = [];
       if (lead_id) {
@@ -587,10 +597,12 @@ router.post(
           activity_type,
           updated_by,
           created_by,
+          quotation_start_date,
+          quotation_expiry_date,
           assignee_log,
           updated_at
          )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
         [
           lead_id || null,
           company_name || null,
@@ -611,6 +623,8 @@ router.post(
           activity_type || null,
           updatedBy,
           updatedBy,
+          parsedQuotationStartDate,
+          parsedQuotationExpiryDate,
           assigneeLog.length > 0 ? JSON.stringify(assigneeLog) : null,
         ],
       );
@@ -733,6 +747,9 @@ router.get("/filter", authenticateAndAuthorize(), async (req, res) => {
         q.description,
         q.assignee,
         q.follow_up_date,
+        q.quotation_start_date,
+        q.quotation_expiry_date,
+        q.created_by,
         q.updated_by,
         q.updated_at,
         q.created_at as quotation_created_at,
@@ -837,12 +854,15 @@ router.put(
         quotation_no,
         quotation_date,
         activity_type,
+        quotation_status,
         amount,
         discount,
         tax,
         grand_total,
         description,
         assignee,
+        quotation_start_date,
+        quotation_expiry_date,
       } = req.body;
 
       const updatedBy =
@@ -901,19 +921,48 @@ router.put(
       const parsedTax = parseNum(tax);
       const parsedGrandTotal = parseNum(grand_total);
       const parsedQuotationDate = parseDate(quotation_date);
+      const parsedQuotationStartDate = parseDate(quotation_start_date);
+      const parsedQuotationExpiryDate = parseDate(quotation_expiry_date);
+
+      let assigneeLog = null;
+      if (assignee && assignee !== prevAssignee) {
+        let logs = [];
+        try {
+          const [qRow] = await db
+            .promise()
+            .query("SELECT assignee_log FROM quotation WHERE id = ?", [req.params.id]);
+          if (qRow.length > 0 && qRow[0].assignee_log) {
+            logs = JSON.parse(qRow[0].assignee_log);
+            if (!Array.isArray(logs)) logs = [];
+          }
+        } catch (e) {
+          logs = [];
+        }
+        logs.push({
+          previous_assignee: prevAssignee,
+          new_assignee: assignee,
+          changed_by: updatedBy,
+          changed_at: new Date().toISOString(),
+          description: "Assigned upon quotation update",
+          files: [],
+        });
+        assigneeLog = JSON.stringify(logs);
+      }
 
       await db.promise().query(
         `UPDATE quotation SET 
         quotation_no = ?, 
         quotation_date = ?, 
         activity_type = ?, 
-        quotation_status = ?,
+        quotation_status = COALESCE(?, quotation_status),
         amount = ?, 
         discount = ?, 
         tax = ?, 
         grand_total = ?, 
         description = ?, 
         assignee = ?,
+        quotation_start_date = ?,
+        quotation_expiry_date = ?,
         assignee_log = COALESCE(?, assignee_log),
         updated_by = ?,
         updated_at = CURRENT_TIMESTAMP
@@ -922,12 +971,16 @@ router.put(
           quotation_no || null,
           parsedQuotationDate,
           activity_type || null,
+          quotation_status || null,
           parsedAmount,
           parsedDiscount,
           parsedTax,
           parsedGrandTotal,
           description || null,
           assignee || null,
+          parsedQuotationStartDate,
+          parsedQuotationExpiryDate,
+          assigneeLog,
           updatedBy,
           req.params.id,
         ],
@@ -1628,6 +1681,8 @@ router.get(
           q.updated_at,
           q.created_at,
           q.created_by,
+          q.quotation_start_date,
+          q.quotation_expiry_date,
 
           l.status as lead_status,
           l.assignee as lead_assignee,
