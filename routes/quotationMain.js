@@ -15,6 +15,11 @@ async function validateAssignee(assignee, assignerRole) {
   const assigneeName = String(assignee).trim();
   if (!assigneeName) return null;
 
+  // If assigner is Super Admin or Admin, bypass all validation constraints
+  if (assignerRole === "Super Admin" || assignerRole === "Admin") {
+    return null;
+  }
+
   const [userRows] = await db
     .promise()
     .query(
@@ -35,9 +40,12 @@ async function validateAssignee(assignee, assignerRole) {
   }
 
   const targetRole = userRows[0].role;
+  
+  // If target assignee is Super Admin, allow assigning to them
   if (targetRole === "Super Admin") {
-    return "Cannot assign to Super Admin";
+    return null;
   }
+  
   if (targetRole === "Admin") {
     return "Cannot assign to Admin";
   }
@@ -393,9 +401,11 @@ router.get(
 router.post(
   "/insert",
   authenticateAndAuthorize(),
-  upload.array("files", 5),
+  // upload.array("files", 5),
   async (req, res) => {
     try {
+      // Multer/Files upload disabled
+      /*
       const sizeError = validateUploadedFiles(req);
       if (sizeError) {
         if (req.files && req.files.length > 0) {
@@ -411,6 +421,7 @@ router.post(
         }
         return res.status(400).json({ success: false, message: sizeError });
       }
+      */
       let {
         lead_id,
         company_name,
@@ -638,6 +649,7 @@ router.post(
         );
       }
 
+      /*
       if (req.files && req.files.length > 0) {
         const fileValues = req.files.map((f) => [
           quotationId,
@@ -653,6 +665,7 @@ router.post(
           [fileValues],
         );
       }
+      */
 
       try {
         const userName =
@@ -847,7 +860,7 @@ router.get("/filter", authenticateAndAuthorize(), async (req, res) => {
 router.put(
   "/update/:id",
   authenticateAndAuthorize(),
-  upload.array("files", 5),
+  // upload.array("files", 5),
   async (req, res) => {
     try {
       const {
@@ -1006,6 +1019,7 @@ router.put(
       }
 
       // Save files if uploaded
+      /*
       if (req.files && req.files.length > 0) {
         const fileValues = req.files.map((file) => [
           req.params.id,
@@ -1021,6 +1035,7 @@ router.put(
           [fileValues],
         );
       }
+      */
 
       res.json({
         success: true,

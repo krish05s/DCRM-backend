@@ -98,13 +98,14 @@ function validateUploadedFiles(req) {
 
 router.post("/insert",
   authenticateAndAuthorize(),
-  upload.array("files", 5),
+  // upload.array("files", 5),
   async (req, res) => {
     try {
       // ======================================
       // FILE SIZE VALIDATION
       // ======================================
 
+      /*
       const sizeError = validateUploadedFiles(req);
 
       if (sizeError) {
@@ -122,6 +123,7 @@ router.post("/insert",
           message: sizeError,
         });
       }
+      */
 
       // ======================================
       // BODY DATA
@@ -172,6 +174,7 @@ router.post("/insert",
       // INSERT FILES
       // ======================================
 
+      /*
       if (req.files && req.files.length > 0) {
         // ======================================
         // DUPLICATE FILE CHECK
@@ -215,6 +218,7 @@ router.post("/insert",
           [fileValues],
         );
       }
+      */
 
       // ======================================
       // SUCCESS RESPONSE

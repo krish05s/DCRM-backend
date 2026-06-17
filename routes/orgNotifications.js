@@ -1,10 +1,11 @@
 const express = require("express");
 const db = require("../db");
+const authenticateAndAuthorize = require("../middlewares/authMiddleware");
 
 const router = express.Router();
 
 // read data
-router.get("/read", (req, res) => {
+router.get("/read", authenticateAndAuthorize("Super Admin"), (req, res) => {
     const sql = "SELECT * FROM org_notifications";
     db.query(sql, (err, result) => {
         if (err) return res.status(500).json({ error: err });
@@ -14,7 +15,7 @@ router.get("/read", (req, res) => {
 
 
 // update all status
-router.patch("/update/:id", (req, res) => {
+router.patch("/update/:id", authenticateAndAuthorize("Super Admin"), (req, res) => {
     const { field, value } = req.body;
     const { id } = req.params;
 
