@@ -27,7 +27,7 @@ const MAX_DOC_SIZE = 15 * 1024 * 1024; // 15MB
 const storage = new CloudinaryStorage({
   cloudinary,
   params: async (req, file) => ({
-    folder: "crm/contracts",   // ✅ CONTRACT FOLDER
+    folder: "dcrm/contracts",   // ✅ CONTRACT FOLDER
     resource_type: "auto",
   }),
 });
@@ -313,34 +313,35 @@ router.put("/update/:id", authenticateAndAuthorize(), upload.array("files", 5), 
 
 
 // DELETE contract by id
-router.delete("/delete/:id", authenticateAndAuthorize(), (req, res) => {
+router.delete("/delete/:id", authenticateAndAuthorize(), async (req, res) => {
     const id = req.params.id;
-
-    // 1. Delete files first (child table)
-    const deleteFilesSQL = "DELETE FROM contract_files WHERE contract_id = ?";
-
-    db.query(deleteFilesSQL, [id], (err) => {
-        if (err) {
-            console.log("SQL ERROR (delete files):", err);
-            return res.status(500).json({ success: false, error: err });
+    try {
+        // 1. Get files first to delete from Cloudinary
+        const [files] = await db.promise().query(
+            "SELECT public_id FROM contract_files WHERE contract_id = ?",
+            [id]
+        );
+        for (const file of files) {
+            if (file.public_id) {
+                await cloudinary.uploader.destroy(file.public_id);
+            }
         }
 
-        // 2. Delete contract (parent table)
-        const deleteContractSQL = "DELETE FROM contracts WHERE id = ?";
+        // 2. Delete files from DB (child table)
+        await db.promise().query("DELETE FROM contract_files WHERE contract_id = ?", [id]);
 
-        db.query(deleteContractSQL, [id], (err2, result) => {
-            if (err2) {
-                console.log("SQL ERROR (delete contract):", err2);
-                return res.status(500).json({ success: false, error: err2 });
-            }
+        // 3. Delete contract (parent table)
+        const [result] = await db.promise().query("DELETE FROM contracts WHERE id = ?", [id]);
 
-            if (result.affectedRows === 0) {
-                return res.status(404).json({ success: false, message: "Contract not found" });
-            }
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, message: "Contract not found" });
+        }
 
-            res.json({ success: true, message: "Contract and related files deleted successfully" });
-        });
-    });
+        res.json({ success: true, message: "Contract and related files deleted successfully" });
+    } catch (err) {
+        console.log("SQL ERROR (delete contract):", err);
+        res.status(500).json({ success: false, error: err.message });
+    }
 });
 
 
@@ -359,12 +360,22 @@ router.get("/files/:id", authenticateAndAuthorize(), async (req, res) => {
     }
 });
 
-router.delete("/delete-file/:id", (req, res) => {
+router.delete("/delete-file/:id", async (req, res) => {
     const id = req.params.id;
     try {
-        db.query("DELETE FROM contract_files WHERE id = ?", [id]);
+        // 1. Get file first to delete from Cloudinary
+        const [files] = await db.promise().query(
+            "SELECT public_id FROM contract_files WHERE id = ?",
+            [id]
+        );
+        if (files.length > 0 && files[0].public_id) {
+            await cloudinary.uploader.destroy(files[0].public_id);
+        }
+        
+        await db.promise().query("DELETE FROM contract_files WHERE id = ?", [id]);
         res.json({ success: true, message: "Deleted" });
     } catch (err) {
+        console.error("Error deleting file:", err);
         res.status(500).json({ success: false, message: "Error deleting" });
     }
 });

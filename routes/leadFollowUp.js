@@ -30,7 +30,7 @@ const MAX_DOC_SIZE = 5 * 1024 * 1024;
 const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: async (req, file) => ({
-    folder: "crm/followups", // 👈 folder in cloudinary
+    folder: "dcrm/followups", // 👈 folder in cloudinary
     resource_type: "auto",   // 👈 supports image/pdf/excel
   }),
 });
@@ -192,7 +192,7 @@ router.delete("/delete/:id", async (req, res) => {
 
     if (rows.length) {
       // ✅ DELETE FROM CLOUDINARY
-      await cloudinary.uploader.destroy(public_id);
+      await cloudinary.uploader.destroy(rows[0].public_id);
 
       // ✅ DELETE FROM DB
       await db.promise().query(

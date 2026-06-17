@@ -34,7 +34,7 @@ const storage = new CloudinaryStorage({
     const cleanName = nameWithoutExt.replace(/[^a-zA-Z0-9]/g, "_");
     const publicId = isRaw ? `${cleanName}-${uniqueSuffix}.${ext}` : `${cleanName}-${uniqueSuffix}`;
     return {
-      folder: "crm/quotation_revision",
+      folder: "dcrm/quotation_revision",
       resource_type: isRaw ? "raw" : "auto",
       public_id: publicId,
     };
