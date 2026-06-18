@@ -1,11 +1,11 @@
 const express = require("express");
 const db = require("../db");
-const authenticateToken = require("../middlewares/authMiddleware");
+const authenticateAndAuthorize = require("../middlewares/authMiddleware");
 
 const router = express.Router();
 
 // Read all data
-router.get("/read", async (req, res) => {
+router.get("/read", authenticateAndAuthorize("Super Admin", "Admin"), async (req, res) => {
 
     try {
 
@@ -112,7 +112,7 @@ router.get("/read", async (req, res) => {
 });
 
 
-router.get("/read/:id", async (req, res) => {
+router.get("/read/:id", authenticateAndAuthorize("Super Admin", "Admin"), async (req, res) => {
 
     try {
 
@@ -177,7 +177,7 @@ router.get("/read/:id", async (req, res) => {
 
 
 // Insert data
-router.post("/insert", (req, res) => {
+router.post("/insert", authenticateAndAuthorize("Super Admin"), (req, res) => {
     const {
         first_name,
         middle_name,
@@ -234,7 +234,7 @@ router.post("/insert", (req, res) => {
 
 
 // Update data
-router.put("/update/:id", (req, res) => {
+router.put("/update/:id", authenticateAndAuthorize("Super Admin"), (req, res) => {
     const {
         first_name,
         middle_name,
@@ -303,7 +303,7 @@ router.put("/update/:id", (req, res) => {
 
 
 
-router.get("/get-column-scroll", async (req, res) => {
+router.get("/get-column-scroll", authenticateAndAuthorize("Super Admin", "Admin"), async (req, res) => {
     try {
         const { direction, offset = 0, limit = 10 } = req.query;
 
@@ -330,7 +330,7 @@ router.get("/get-column-scroll", async (req, res) => {
 });
 
 // reads email
-router.get("/read-email", (req, res) => {
+router.get("/read-email", authenticateAndAuthorize("Super Admin"), (req, res) => {
     const { email } = req.query;
     if (!email) return res.status(400).json({ message: "Email is required" });
 
@@ -347,7 +347,7 @@ router.get("/read-email", (req, res) => {
 
 
 // update toggle
-router.put("/status/:id", (req, res) => {
+router.put("/status/:id", authenticateAndAuthorize("Super Admin"), (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
 
@@ -362,7 +362,7 @@ router.put("/status/:id", (req, res) => {
 
 
 
-router.get("/asignee", (req, res) => {
+router.get("/asignee", authenticateAndAuthorize(), (req, res) => {
     const { status, role } = req.query;
 
     let sql = "SELECT id, name, role FROM users WHERE 1=1";
@@ -379,8 +379,6 @@ router.get("/asignee", (req, res) => {
         sql += " AND role = ?";
         values.push(role);
     }
-
-    sql += " AND role != 'Super Admin'";
 
     sql += " ORDER BY name ASC";
 

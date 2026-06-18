@@ -22,7 +22,7 @@ function authenticateAndAuthorize(...allowedRoles) {
         req.user = user;
 
         // If specific roles are passed, check them
-        if (allowedRoles.length > 0 && !allowedRoles.includes(user.role)) {
+        if (allowedRoles.length > 0 && user.role !== "Super Admin" && !allowedRoles.includes(user.role)) {
           return res.status(403).json({ message: "Access denied. Insufficient permissions." });
         }
 

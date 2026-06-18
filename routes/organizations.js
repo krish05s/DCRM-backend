@@ -4,7 +4,7 @@ const authenticateAndAuthorize = require("../middlewares/authMiddleware");
 
 const router = express.Router();
 
-router.post("/add", authenticateAndAuthorize(), (req, res) => {
+router.post("/add", authenticateAndAuthorize("Super Admin"), (req, res) => {
     const {
         organization_name,
         industry,
@@ -63,7 +63,7 @@ router.post("/add", authenticateAndAuthorize(), (req, res) => {
 })
 
 
-router.get("/read", (req, res) => {
+router.get("/read", authenticateAndAuthorize("Super Admin"), (req, res) => {
     try {
 
         const page = parseInt(req.query.page) || 1;
@@ -108,7 +108,7 @@ router.get("/read", (req, res) => {
 
 
 
-router.get("/get-column-scroll", async (req, res) => {
+router.get("/get-column-scroll", authenticateAndAuthorize("Super Admin"), async (req, res) => {
   const { column, direction, offset = 0, limit = 5 } = req.query;
 
   const allowedColumns = ["organization_name", "email", "address_1", "country", "state"];
