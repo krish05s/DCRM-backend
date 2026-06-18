@@ -15,6 +15,11 @@ async function validateAssignee(assignee, assignerRole) {
   const assigneeName = String(assignee).trim();
   if (!assigneeName) return null;
 
+  // If assigner is Super Admin or Admin, bypass all validation constraints
+  if (assignerRole === "Super Admin" || assignerRole === "Admin") {
+    return null;
+  }
+
   const [userRows] = await db
     .promise()
     .query(
@@ -35,9 +40,12 @@ async function validateAssignee(assignee, assignerRole) {
   }
 
   const targetRole = userRows[0].role;
+  
+  // If target assignee is Super Admin, allow assigning to them
   if (targetRole === "Super Admin") {
-    return "Cannot assign to Super Admin";
+    return null;
   }
+  
   if (targetRole === "Admin") {
     return "Cannot assign to Admin";
   }
@@ -89,7 +97,7 @@ const storage = new CloudinaryStorage({
     const cleanName = nameWithoutExt.replace(/[^a-zA-Z0-9]/g, "_");
     const publicId = isRaw ? `${cleanName}-${uniqueSuffix}.${ext}` : `${cleanName}-${uniqueSuffix}`;
     return {
-      folder: "crm/quotations",
+      folder: "dcrm/quotations",
       resource_type: isRaw ? "raw" : "auto",
       public_id: publicId,
     };
@@ -200,6 +208,9 @@ router.get("/read", authenticateAndAuthorize(), async (req, res) => {
           q.assignee,
           q.assignee_log,
           q.follow_up_date,
+          q.quotation_start_date,
+          q.quotation_expiry_date,
+          q.created_by,
           q.updated_by,
           q.updated_at,
           q.created_at as quotation_created_at,
@@ -258,6 +269,9 @@ router.get("/read", authenticateAndAuthorize(), async (req, res) => {
           q.assignee,
           q.assignee_log,
           q.follow_up_date,
+          q.quotation_start_date,
+          q.quotation_expiry_date,
+          q.created_by,
           q.updated_by,
           q.updated_at,
           q.created_at as quotation_created_at,
@@ -387,9 +401,11 @@ router.get(
 router.post(
   "/insert",
   authenticateAndAuthorize(),
-  upload.array("files", 5),
+  // upload.array("files", 5),
   async (req, res) => {
     try {
+      // Multer/Files upload disabled
+      /*
       const sizeError = validateUploadedFiles(req);
       if (sizeError) {
         if (req.files && req.files.length > 0) {
@@ -405,6 +421,7 @@ router.post(
         }
         return res.status(400).json({ success: false, message: sizeError });
       }
+      */
       let {
         lead_id,
         company_name,
@@ -422,6 +439,8 @@ router.post(
         amount,
         description,
         activity_type,
+        quotation_start_date,
+        quotation_expiry_date,
       } = req.body;
 
       const updatedBy =
@@ -520,6 +539,8 @@ router.post(
 
       const parsedFollowUpDate = parseDate(follow_up_date);
       const parsedQuotationDate = parseDate(quotation_date);
+      const parsedQuotationStartDate = parseDate(quotation_start_date);
+      const parsedQuotationExpiryDate = parseDate(quotation_expiry_date);
 
       let assigneeLog = [];
       if (lead_id) {
@@ -587,10 +608,12 @@ router.post(
           activity_type,
           updated_by,
           created_by,
+          quotation_start_date,
+          quotation_expiry_date,
           assignee_log,
           updated_at
          )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
         [
           lead_id || null,
           company_name || null,
@@ -611,6 +634,8 @@ router.post(
           activity_type || null,
           updatedBy,
           updatedBy,
+          parsedQuotationStartDate,
+          parsedQuotationExpiryDate,
           assigneeLog.length > 0 ? JSON.stringify(assigneeLog) : null,
         ],
       );
@@ -624,6 +649,7 @@ router.post(
         );
       }
 
+      /*
       if (req.files && req.files.length > 0) {
         const fileValues = req.files.map((f) => [
           quotationId,
@@ -639,6 +665,7 @@ router.post(
           [fileValues],
         );
       }
+      */
 
       try {
         const userName =
@@ -733,6 +760,9 @@ router.get("/filter", authenticateAndAuthorize(), async (req, res) => {
         q.description,
         q.assignee,
         q.follow_up_date,
+        q.quotation_start_date,
+        q.quotation_expiry_date,
+        q.created_by,
         q.updated_by,
         q.updated_at,
         q.created_at as quotation_created_at,
@@ -830,19 +860,22 @@ router.get("/filter", authenticateAndAuthorize(), async (req, res) => {
 router.put(
   "/update/:id",
   authenticateAndAuthorize(),
-  upload.array("files", 5),
+  // upload.array("files", 5),
   async (req, res) => {
     try {
       const {
         quotation_no,
         quotation_date,
         activity_type,
+        quotation_status,
         amount,
         discount,
         tax,
         grand_total,
         description,
         assignee,
+        quotation_start_date,
+        quotation_expiry_date,
       } = req.body;
 
       const updatedBy =
@@ -901,19 +934,48 @@ router.put(
       const parsedTax = parseNum(tax);
       const parsedGrandTotal = parseNum(grand_total);
       const parsedQuotationDate = parseDate(quotation_date);
+      const parsedQuotationStartDate = parseDate(quotation_start_date);
+      const parsedQuotationExpiryDate = parseDate(quotation_expiry_date);
+
+      let assigneeLog = null;
+      if (assignee && assignee !== prevAssignee) {
+        let logs = [];
+        try {
+          const [qRow] = await db
+            .promise()
+            .query("SELECT assignee_log FROM quotation WHERE id = ?", [req.params.id]);
+          if (qRow.length > 0 && qRow[0].assignee_log) {
+            logs = JSON.parse(qRow[0].assignee_log);
+            if (!Array.isArray(logs)) logs = [];
+          }
+        } catch (e) {
+          logs = [];
+        }
+        logs.push({
+          previous_assignee: prevAssignee,
+          new_assignee: assignee,
+          changed_by: updatedBy,
+          changed_at: new Date().toISOString(),
+          description: "Assigned upon quotation update",
+          files: [],
+        });
+        assigneeLog = JSON.stringify(logs);
+      }
 
       await db.promise().query(
         `UPDATE quotation SET 
         quotation_no = ?, 
         quotation_date = ?, 
         activity_type = ?, 
-        quotation_status = ?,
+        quotation_status = COALESCE(?, quotation_status),
         amount = ?, 
         discount = ?, 
         tax = ?, 
         grand_total = ?, 
         description = ?, 
         assignee = ?,
+        quotation_start_date = ?,
+        quotation_expiry_date = ?,
         assignee_log = COALESCE(?, assignee_log),
         updated_by = ?,
         updated_at = CURRENT_TIMESTAMP
@@ -922,12 +984,16 @@ router.put(
           quotation_no || null,
           parsedQuotationDate,
           activity_type || null,
+          quotation_status || null,
           parsedAmount,
           parsedDiscount,
           parsedTax,
           parsedGrandTotal,
           description || null,
           assignee || null,
+          parsedQuotationStartDate,
+          parsedQuotationExpiryDate,
+          assigneeLog,
           updatedBy,
           req.params.id,
         ],
@@ -953,6 +1019,7 @@ router.put(
       }
 
       // Save files if uploaded
+      /*
       if (req.files && req.files.length > 0) {
         const fileValues = req.files.map((file) => [
           req.params.id,
@@ -968,6 +1035,7 @@ router.put(
           [fileValues],
         );
       }
+      */
 
       res.json({
         success: true,
@@ -1628,6 +1696,8 @@ router.get(
           q.updated_at,
           q.created_at,
           q.created_by,
+          q.quotation_start_date,
+          q.quotation_expiry_date,
 
           l.status as lead_status,
           l.assignee as lead_assignee,

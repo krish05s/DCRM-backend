@@ -22,7 +22,7 @@ const DOC_EXT = ["pdf", "txt", "doc", "xlsx", "csv", "pptx"];
 const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: async (req, file) => ({
-    folder: "crm/tasks",
+    folder: "dcrm/tasks",
     resource_type: "auto",
   }),
 });
