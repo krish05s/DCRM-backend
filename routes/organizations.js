@@ -26,6 +26,24 @@ router.post("/add", authenticateAndAuthorize("Super Admin"), (req, res) => {
         micr_code,
     } = req.body;
 
+// validation for require this 5 field 
+  const requiredFields = [
+    { value: organization_name, label: "Organization Name" },
+    { value: email, label: "Email" },
+    { value: address_1, label: "Address Line 1" },
+    { value: country, label: "Country" },
+    { value: state, label: "State" },
+  ];
+
+  for (const field of requiredFields) {
+    if (!field.value?.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: `${field.label} is required`,
+      });
+    }
+  }
+
 
     const sql = `INSERT INTO organizations (
     organization_name, industry, email, address_1, address_2, country, state, city, pincode, gst_number, contact_1,
@@ -72,7 +90,7 @@ router.get("/read", authenticateAndAuthorize("Super Admin"), (req, res) => {
 
         const countSql = `SELECT COUNT(*) AS total FROM organizations`;
 
-        const dataSql = `SELECT organization_name, email, address_1, country, state FROM organizations
+        const dataSql = `SELECT id, organization_name, industry, email, address_1, address_2, country, state, city, pincode, gst_number, contact_1, contact_2, benificiary_name, bank_name, account_no, account_type, ifsc_code, micr_code FROM organizations
         LIMIT ? OFFSET ?`;
 
         db.query(countSql, (countErr, countResult) => {
@@ -120,7 +138,7 @@ router.get("/get-column-scroll", authenticateAndAuthorize("Super Admin"), async 
   const total = countRows[0].total;
 
   let newOffset = Number(offset);
-  if (direction === "down") newOffset = Math.min(newOffset + 1, total - limit);
+  if (direction === "down") newOffset = Math.min(newOffset + 1, Math.max(total - limit, 0));
   else if (direction === "up") newOffset = Math.max(newOffset - 1, 0);
 
   const [rows] = await db.promise().query(
@@ -149,8 +167,103 @@ router.get("/organization-name", (req, res) => {
   });
 });
 
+// Update organization data
+router.put("/update/:id", authenticateAndAuthorize("Super Admin"), (req, res) => {
+    const { id } = req.params;
+    const {
+        organization_name,
+        industry,
+        email,
+        address_1,
+        address_2,
+        country,
+        state,
+        city,
+        pincode,
+        gst_number,
+        contact_1,
+        contact_2,
+        benificiary_name,
+        bank_name,
+        account_no,
+        account_type,
+        ifsc_code,
+        micr_code,
+    } = req.body;
+
+// validation for require this 5 field 
+  const requiredFields = [
+    { value: organization_name, label: "Organization Name" },
+    { value: email, label: "Email" },
+    { value: address_1, label: "Address Line 1" },
+    { value: country, label: "Country" },
+    { value: state, label: "State" },
+  ];
+
+  for (const field of requiredFields) {
+    if (!field.value?.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: `${field.label} is required`,
+      });
+    }
+  }
 
 
+    const sql = `UPDATE organizations SET 
+        organization_name = ?, industry = ?, email = ?, address_1 = ?, address_2 = ?, country = ?, state = ?, city = ?, pincode = ?, gst_number = ?, contact_1 = ?,
+        contact_2 = ?, benificiary_name = ?, bank_name = ?, account_no = ?, account_type = ?, ifsc_code = ?, micr_code = ? 
+        WHERE id = ?`;
 
+    const values = [
+        organization_name,
+        industry,
+        email,
+        address_1,
+        address_2,
+        country,
+        state,
+        city,
+        pincode,
+        gst_number,
+        contact_1,
+        contact_2,
+        benificiary_name,
+        bank_name,
+        account_no,
+        account_type,
+        ifsc_code,
+        micr_code,
+        id,
+    ];
+
+    db.query(sql, values, (err, result) => {
+        if (err) {
+            console.error("Error updating organization:", err);
+            return res.status(500).json({ error: "Database error" });
+        }
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: "Organization not found" });
+        }
+        res.status(200).json({ message: "Organization updated successfully" });
+    });
+});
+
+// Delete organization data
+router.delete("/:id", authenticateAndAuthorize("Super Admin"), (req, res) => {
+    const { id } = req.params;
+    const sql = `DELETE FROM organizations WHERE id = ?`;
+
+    db.query(sql, [id], (err, result) => {
+        if (err) {
+            console.error("Error deleting organization:", err);
+            return res.status(500).json({ error: "Database error" });
+        }
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: "Organization not found" });
+        }
+        res.status(200).json({ message: "Organization deleted successfully" });
+    });
+});
 
 module.exports = router;
