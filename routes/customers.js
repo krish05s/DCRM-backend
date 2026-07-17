@@ -592,6 +592,9 @@ router.put("/customer-data/:id", authenticateToken(), (req, res) => {
 router.get("/customer/:id", authenticateToken(), (req, res) => {
   const { id } = req.params;
   const user_id = req.user.id;
+  const user_role = req.user.role;
+
+  const isAdmin = user_role === "Super Admin" || user_role === "Admin";
 
   // customer_data query
   const customerQuery = `
@@ -608,7 +611,7 @@ router.get("/customer/:id", authenticateToken(), (req, res) => {
   c.remarks
 FROM customer_data c
 LEFT JOIN organizations o ON o.id = c.company_name
-WHERE c.id = ? AND c.user_id = ?
+WHERE c.id = ? ${isAdmin ? "" : "AND c.user_id = ?"}
 `;
 
 
@@ -619,7 +622,9 @@ WHERE c.id = ? AND c.user_id = ?
     WHERE customer_id = ?
   `;
 
-  db.query(customerQuery, [id, user_id], (err, customerResult) => {
+  const queryParams = isAdmin ? [id] : [id, user_id];
+
+  db.query(customerQuery, queryParams, (err, customerResult) => {
     if (err) {
       return res.status(500).json({ message: "Customer query failed", error: err });
     }
@@ -810,6 +815,10 @@ router.post("/customer-contacts", authenticateToken(), (req, res) => {
 router.get("/customer-contacts/:customer_id", authenticateToken(), (req, res) => {
 
   const { customer_id } = req.params;
+  const user_id = req.user.id;
+  const user_role = req.user.role;
+
+  const isAdmin = user_role === "Super Admin" || user_role === "Admin";
 
   const sql = `
 
@@ -831,11 +840,13 @@ router.get("/customer-contacts/:customer_id", authenticateToken(), (req, res) =>
       ON d.id = ct.contact_designation
 
     WHERE ct.customer_id = ?
-      AND c.user_id = ?
+      ${isAdmin ? "" : "AND c.user_id = ?"}
 
   `;
 
-  db.query(sql, [customer_id, req.user.id], (err, rows) => {
+  const queryParams = isAdmin ? [customer_id] : [customer_id, user_id];
+
+  db.query(sql, queryParams, (err, rows) => {
     if (err) {
       return res.status(500).json({
         success: false,
